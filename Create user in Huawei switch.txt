@@ -1,0 +1,109 @@
+Create User thytith with Full Privileges
+The user thytith will have full privileges (level 15) and be allowed to SSH and console login.
+
+system-view
+aaa
+# Create user thytith with password and full privileges (level 15)
+local-user thytith password irreversible-cipher W4rl0ck_
+local-user thytith service-type ssh terminal
+local-user thytith level 15
+quit
+
+# Enable SSH and console access for thytith
+user-interface vty 0 4
+authentication-mode aaa
+protocol inbound ssh
+quit
+
+user-interface console 0
+authentication-mode aaa
+protocol inbound all
+quit
+
+============Create User ITsupport with Read-Only Privileges (View Configuration & Logs)
+The user ITsupport will have view-only access (level 1), allowing them to view configuration and check logs.
+
+system-view
+aaa
+# Create user ITsupport with password and read-only privileges (level 1)
+local-user ITsupport password irreversible-cipher support123
+local-user ITsupport service-type ssh terminal
+local-user ITsupport level 1
+quit
+
+=========Enable Logging for ITsupport to View Logs
+To allow ITsupport to view logs, you will need to configure the switch to enable the log system and set the proper log level. This configuration ensures that the user can access logs.
+
+# Enable system logging and set log severity level
+info-center enable
+info-center loghost 192.168.99.10  # Replace with your syslog server's IP
+info-center source SSH channel 2 log level informational
+
+==========Enable SSH and Console Login for Both Users=======
+# SSH configuration
+stelnet server enable
+
+# Console access (already configured above under user-interface console)
+user-interface console 0
+authentication-mode aaa
+protocol inbound all
+quit
+
+# VTY access (for SSH)
+user-interface vty 0 4
+authentication-mode aaa
+protocol inbound ssh
+quit
+
+========Verify Configuration====
+#Check user access configuration
+
+display local-user
+
+#Check SSH access
+
+display stelnet server status
+
+#Check log settings
+
+display info-center loghost
+
+#Testing the Configuration
+ssh thytith@<switch-ip>
+ssh ITsupport@<switch-ip>
+
+==============full==========
+system-view
+aaa
+
+# User thytith with full privileges
+local-user thytith password irreversible-cipher W4rl0ck_
+local-user thytith service-type ssh terminal
+local-user thytith level 15
+
+# User ITsupport with read-only privileges
+local-user ITsupport password irreversible-cipher support123
+local-user ITsupport service-type ssh terminal
+local-user ITsupport level 1
+
+# Enable SSH and console login
+user-interface vty 0 4
+authentication-mode aaa
+protocol inbound ssh
+quit
+
+user-interface console 0
+authentication-mode aaa
+protocol inbound all
+quit
+
+# Enable logging
+info-center enable
+info-center loghost 192.168.99.10  # Replace with syslog server IP
+info-center source SSH channel 2 log level informational
+
+# Enable SSH service
+stelnet server enable
+
+
+

@@ -1,0 +1,270 @@
+#=============================Core Switch Configuration (CoreSW)==================================
+! Create VLANs
+vlan 10
+ name Native
+vlan 20
+ name Data
+vlan 30
+ name Voice
+
+! Port-channel interface
+interface Port-channel1
+ switchport
+ switchport mode trunk
+ switchport trunk native vlan 10
+ switchport trunk allowed vlan 10,20,30
+ spanning-tree portfast trunk
+ spanning-tree bpduguard enable
+!
+
+! Physical interfaces part of port-channel
+interface GigabitEthernet1/0/1
+ channel-group 1 mode active
+ switchport trunk encapsulation dot1q
+ switchport mode trunk
+
+interface GigabitEthernet1/0/2
+ channel-group 1 mode active
+ switchport trunk encapsulation dot1q
+ switchport mode trunk
+!
+
+! Port security (not typically on trunk ports, more on access ports, but showing best practice)
+! Apply on access ports only
+interface GigabitEthernet1/0/10
+ switchport mode access
+ switchport access vlan 20
+ switchport port-security
+ switchport port-security maximum 2
+ switchport port-security violation restrict
+ switchport port-security mac-address sticky
+ spanning-tree portfast
+!
+
+! ACL to restrict communication between VLAN 20 and VLAN 30
+ip access-list extended VLAN20_TO_30_BLOCK
+ deny ip 192.168.20.0 0.0.0.255 192.168.30.0 0.0.0.255
+ permit ip any any
+
+! Apply ACL on SVI or routed interface
+interface vlan 20
+ ip access-group VLAN20_TO_30_BLOCK in
+!
+
+
+#======================L2 Switch ====================
+! Create VLANs
+vlan 10
+ name Native
+vlan 20
+ name Data
+vlan 30
+ name Voice
+
+! Port-channel trunk to Core
+interface Port-channel1
+ switchport mode trunk
+ switchport trunk native vlan 10
+ switchport trunk allowed vlan 10,20,30
+ spanning-tree portfast trunk
+ spanning-tree bpduguard enable
+!
+
+! Physical interfaces in port-channel
+interface GigabitEthernet1/0/1
+ channel-group 1 mode passive
+ switchport mode trunk
+
+interface GigabitEthernet1/0/2
+ channel-group 1 mode passive
+ switchport mode trunk
+!
+
+! Access port with port-security (Data VLAN)
+interface GigabitEthernet1/0/10
+ switchport mode access
+ switchport access vlan 20
+ switchport voice vlan 30
+ switchport port-security
+ switchport port-security maximum 2
+ switchport port-security violation restrict
+ switchport port-security mac-address sticky
+ spanning-tree portfast
+!
+
+! Another access port
+interface GigabitEthernet1/0/11
+ switchport mode access
+ switchport access vlan 30
+ switchport port-security
+ switchport port-security maximum 2
+ switchport port-security violation restrict
+ switchport port-security mac-address sticky
+ spanning-tree portfast
+!
+
+=========Create VLAN 99 and assign a Management IP=========
+! VLAN 99 as Management
+vlan 99
+ name Management
+
+! Assign SVI (Switch Virtual Interface) IP for remote access (Telnet/SSH)
+interface vlan 99
+ ip address 192.168.99.10 255.255.255.0
+ no shutdown
+!
+ip default-gateway 192.168.99.1  ! (Assuming this is your router or firewall IP)
+
+==========Enable SSH and Secure Management Access===========
+! Set domain and generate SSH keys
+hostname CoreSW
+ip domain-name yourdomain.local
+crypto key generate rsa
+ 2048
+!
+ip ssh version 2
+!
+line vty 0 4
+ transport input ssh
+ login local
+ privilege level 1
+!
+
+===============Configure Users and Privilege Levels===========
+
+! Full privilege user
+username thytith privilege 15 secret W4rl0ck_
+
+! View-only user
+username ITsupport privilege 1 secret Support123
+
+======Restrict View-Only User's Commands (Optional but Recommended)=========
+To limit ITsupport to safe commands, use privilege exec level controls:
+
+! Example: Allow read-only commands to ITsupport (level 1)
+privilege exec level 1 show
+privilege exec level 1 show running-config
+privilege exec level 1 show log
+privilege exec level 1 show version
+privilege exec level 1 show interface
+privilege exec level 1 show vlan
+privilege exec level 1 ping
+!
+! Prevent access to configuration commands
+! (They are not allowed by default in level 1)
+
+==========(Optional) Use Role-Based CLI Views for Fine Control=============
+Cisco IOS also supports role-based views for more granular control, if needed in the future.
+
+==========Enable Logging for Monitoring====================================
+! Enable logging locally
+logging buffered 8192
+!
+! Optional: Send logs to a remote Syslog server
+logging host 192.168.99.100
+
+=============Restrict Device connection to L2 Switch and Core SW========
+this is core Remote access protection 
+
+interface GigabitEthernet1/0/10
+ switchport mode access
+ switchport access vlan 20
+ switchport port-security
+ switchport port-security maximum 1
+ switchport port-security violation restrict
+ switchport port-security mac-address sticky
+
+=====Verfied MAC of Remote PC======
+show port-security interface Gi1/0/10
+
+Result: 
+Security Violation Count: 2
+Last Source Address: aabb.ccdd.eeff
+Violation Mode: Restrict
+
+===============Configure Access control List======
+Step-by-Step ACL Configuration on Core Switch
+!
+ip access-list extended VLAN20_ALLOW_HTTP_SSH
+ permit tcp 192.168.20.0 0.0.0.255 any eq 80
+ permit tcp 192.168.20.0 0.0.0.255 any eq 8080
+ permit tcp 192.168.20.0 0.0.0.255 any eq 443
+ permit tcp 192.168.20.0 0.0.0.255 any eq 22
+ deny ip any any
+!
+interface vlan 20
+ ip access-group VLAN20_ALLOW_HTTP_SSH in  #(in) outbound only from VLAN 20
+
+This applies the ACL to incoming traffic from VLAN 20
+
+
+
+=========Configure ACL for INBOUND_TO_VLAN20
+!
+ip access-list extended INBOUND_TO_VLAN20
+ permit tcp any 192.168.20.0 0.0.0.255 eq 80
+ permit tcp any 192.168.20.0 0.0.0.255 eq 8080
+ permit tcp any 192.168.20.0 0.0.0.255 eq 443
+ permit tcp any 192.168.20.0 0.0.0.255 eq 22
+ deny ip any any
+!
+interface vlan 20
+ ip access-group INBOUND_TO_VLAN20 out    #(out) inbound only from VLAN 20
+
+Use out here because it affects traffic going to VLAN 20
+
+===============Configure console configure===========
+======L2 and Core switchport
+
+! Set hostname and domain (required for SSH)
+hostname Switch01
+ip domain-name yourdomain.local
+
+! Create local user with privilege 15 (admin)
+username thytith privilege 15 secret W4rl0ck_
+
+! Enable password encryption (optional but recommended)
+service password-encryption
+
+! Generate SSH key (2048-bit recommended)
+crypto key generate rsa
+ 2048
+
+! Set SSH version 2
+ip ssh version 2
+
+! Enable local login on console
+line console 0
+ login local
+ logging synchronous
+ exec-timeout 10 0   ! Optional: auto logout after 10 mins idle
+
+! Enable SSH access on VTY lines (remote login)
+line vty 0 4
+ transport input ssh
+ login local
+ exec-timeout 10 0
+
+========Assign a Management IP (SVI for remote access)
+! Create Management VLAN
+vlan 99
+ name Management
+
+! Assign IP to VLAN 99 for SSH access
+interface vlan 99
+ ip address 192.168.99.10 255.255.255.0
+ no shutdown
+
+! Set default gateway
+ip default-gateway 192.168.99.1
+
+
+=======Test SSH====
+ssh thytith@192.168.99.10
+
+====SSH Verification======
+show running-config | include username
+show ip ssh
+show line vty 0 4
+show line console 0
+

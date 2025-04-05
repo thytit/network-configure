@@ -1,0 +1,145 @@
+Here’s a comprehensive Huawei switch configuration for your S6720 setup, covering:
+
+Port-channel (Eth-Trunk) configuration with native VLAN 10
+
+VLANs: 10 (native), 20 (data), 30 (voice), 99 (management)
+
+Users:
+
+thytith with full privileges
+
+ITsupport with read-only access
+
+SSH and console login enabled
+
+Basic logging configuration
+
+=====Create VLANs========
+system-view
+vlan 10
+vlan 20
+vlan 30
+vlan 99
+quit
+
+======Create Eth-Trunk (Port-channel) with VLANs=========
+interface Eth-Trunk1
+mode trunk
+trunkport vlan 20 30 99
+port trunk pvid vlan 10     # native VLAN
+description Uplink-to-Core
+quit
+
+interface GigabitEthernet1/0/1
+eth-trunk 1
+quit
+interface GigabitEthernet1/0/2
+eth-trunk 1
+quit
+
+===========Assign VLANs to Access Ports (Optional Example)
+interface GigabitEthernet1/0/10
+port link-type access
+port default vlan 20
+description Data-PC-Port
+quit
+
+interface GigabitEthernet1/0/11
+port link-type access
+voice-vlan enable
+voice-vlan 30
+description IP-Phone
+quit
+
+=====Configure Management VLAN
+interface Vlanif99
+ip address 192.168.99.2 255.255.255.0
+quit
+
+interface GigabitEthernet1/0/24
+port link-type access
+port default vlan 99
+description Management-Port
+quit
+
+=======Enable SSH & Console Access
+stelnet server enable
+
+# Optional: Set hostname and keys
+sysname CoreSwitch1
+rsa local-key-pair create
+# (Choose 2048-bit key if asked)
+
+aaa
+local-user thytith password irreversible-cipher W4rl0ck_
+local-user thytith service-type ssh terminal
+local-user thytith level 15
+
+local-user ITsupport password irreversible-cipher support123
+local-user ITsupport service-type ssh terminal
+local-user ITsupport level 1
+quit
+
+user-interface vty 0 4
+authentication-mode aaa
+protocol inbound ssh
+user privilege level 1
+quit
+
+user-interface console 0
+authentication-mode aaa
+protocol inbound all
+quit
+
+SSH requires key generation, so make sure rsa local-key-pair create is done.
+
+====RSA Key Generation for SSH==
+system-view
+
+# Optional but recommended: Set a hostname and domain name first
+sysname CoreSwitch1
+#
+ip domain-name sandgod.net    # <-- Customize as needed
+
+# Now generate the RSA key
+rsa local-key-pair create
+
+
+The key name will be: CoreSwitch1.sandgod.net
+Input the bits of the key (recommended value: 2048): 2048
+
+After RSA generation, confirm SSH server is enabled:
+
+stelnet server enable
+
+ssh thytith@<Switch-IP>
+
+
+============Step-by-Step: Manually Copying the RSA Key Pair==========
+sysname CoreSwitch1
+ip domain-name sandgod.net
+rsa local-key-pair create
+stelnet server enable
+
+display rsa local-key-pair public
+
+copy key and import to other switch
+
+On the second switch:
+system-view
+sysname L2Switch1
+ip domain-name sandgod.net
+
+past RSA to it 
+and run
+
+rsa local-key-pair public
+
+stelnet server enable
+
+
+
+===========Enable Logging
+info-center enable
+info-center loghost 192.168.99.10     # <-- Replace with your syslog server if available
+info-center source SSH channel 2 log level informational
